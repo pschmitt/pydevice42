@@ -1,0 +1,9 @@
+# Login params for Infoblox
+[infoblox]
+HOST='your ip here'
+USER=username
+PASS=password
+
+[misc]
+DEBUG = True
+DRY_RUN = True
