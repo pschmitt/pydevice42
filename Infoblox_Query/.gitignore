@@ -1,8 +1,10 @@
 infoblox_setup.cfg
 
+# Place where I test scripts
+test.py
 
 # obviously ignore everything inside the data folder
-data/*
+data/*.json
 
 # Change the name of the 'env' folder as needed
 .py_venv/
