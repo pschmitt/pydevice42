@@ -4,12 +4,13 @@ from configparser import ConfigParser
 from functools import partial
 
 import urllib3
-from requests import RequestException, Response, Session
+from requests import RequestException, Response, Session, Request
 
 # Use this magnificent library to convert a request to a curl string!
 # Super useful for testing purposes
-# import curlify
-# from pprint import pprint
+import curlify
+
+from pprint import pprint
 
 
 """-------------------- Typing shenanigans  --------------------"""
@@ -303,11 +304,16 @@ def post_network(json_data: NETWORK) -> t.Tuple[t.Optional[int], str]:
     network, mask = json_data["network"].split("/")
     new_subnet = {
         "network": network,
-        "mask": mask,
-        "vlan_id": vlan_id,
-        "name": json_data.get("comment"),
+        "mask_bits": mask,
+        "parent_vlan_id": vlan_id,
+        "name": json_data.get("comment", ""),
         "notes": err,
     }
+    req = Request("POST", url=f"{D42_Host}subnets/", data=new_subnet)
+    prepared = D42Client.session().prepare_request(req)
+    pprint(prepared)
+    print(curlify.to_curl(prepared))
+    D42Client.session().send(prepared)
     return None, "TODO: figure out assigned and allocated"
 
 
@@ -413,18 +419,22 @@ def get_VLAN_id(
         .get("vlans", [])
     )
 
+    err_str = (
+        "Warning 🚨: Two VLANS have the same number! "
+        "This is likely a mistake\n"
+    )
+
     old_vlan = check_repeat_number_vlan(previous_vlans, json_data)
 
     if old_vlan is not None:
-        return int(old_vlan["vlan_id"]), ""
+        return (
+            int(old_vlan["vlan_id"]),
+            err_str if (len(previous_vlans) > 1) else "",
+        )
 
     # Ok, we _have_ to create a whole new VLAN
     if len(previous_vlans) > 1:
-        json_data["notes"] = (
-            "Warning 🚨: Two VLANS have the same number! "
-            "This is likely a mistake\n"
-            f"{json_data['notes']}"
-        )
+        json_data["notes"] = f"{err_str}{json_data['notes']}"
 
     """
     # D42 is particularly annoying with the bloody posts...
@@ -456,7 +466,7 @@ def post_all_VLANs() -> None:
 
 
 if __name__ == "__main__":
-    # get_all_networks()
+    get_all_networks()
     # get_all_IPs()
     # get_all_devices()
-    post_all_VLANs()
+    # post_all_VLANs()
