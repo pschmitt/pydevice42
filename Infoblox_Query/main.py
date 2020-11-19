@@ -1,19 +1,19 @@
-from requests import Response, Session, RequestException
+import json
+import typing as t
 from configparser import ConfigParser
+from functools import partial
+
+import urllib3
+from requests import RequestException, Response, Session
 
 # Use this magnificent library to convert a request to a curl string!
 # Super useful for testing purposes
 # import curlify
 # from pprint import pprint
 
-from functools import partial
-import urllib3
-import json
-
 
 """-------------------- Typing shenanigans  --------------------"""
 
-import typing as t
 
 JSON_Values = t.Union[str, int, float, bool, None]
 HTTP_METHODS = t.Literal["GET", "POST", "PUT"]
