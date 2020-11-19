@@ -4,6 +4,7 @@ infoblox_setup.cfg
 test.py
 
 # obviously ignore everything inside the data folder
+data/*/*.json
 data/*.json
 
 # Change the name of the 'env' folder as needed

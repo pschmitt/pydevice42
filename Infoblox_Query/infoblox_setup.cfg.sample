@@ -1,9 +1,15 @@
 # Login params for Infoblox
 [infoblox]
-HOST='your ip here'
-USER=username
-PASS=password
+HOST        =   https://example.com
+USER        =   example
+PASS        =   example!
+
+[d42]
+# Login params for Device42
+HOST        = https://example.com
+USER        = example
+PWD         = example!
 
 [misc]
-DEBUG = True
-DRY_RUN = True
+DEBUG       = True
+DRY_RUN     = True

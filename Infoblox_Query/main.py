@@ -1,17 +1,17 @@
-from requests import Response, Session
+from requests import Response, Session, RequestException
 from configparser import ConfigParser
 
 # Use this magnificent library to convert a request to a curl string!
 # Super useful for testing purposes
 # import curlify
+# from pprint import pprint
 
 from functools import partial
 import urllib3
 import json
 
-from pprint import pprint
 
-""" Typing shenanigans """
+"""-------------------- Typing shenanigans  --------------------"""
 
 import typing as t
 
@@ -22,7 +22,7 @@ T = t.TypeVar("T")
 # TODO: Add more specitivity to the various attributes
 
 
-""" Infoblox Related Types """
+"""-------------------- Infoblox Related Types --------------------"""
 
 
 class ExtraInfo(t.TypedDict):
@@ -62,11 +62,20 @@ class IPV4ADDRESS(t.TypedDict):
     usage: t.List[str]
 
 
-""" Device42 Related Types """
+"""-------------------- Device42 Related Types --------------------"""
 
 
-class VlanD42(t.TypedDict):
+class VlanD42(t.TypedDict, total=False):
     number: str
+    name: str
+    description: str
+    notes: str
+    vlan_id: str
+
+
+class SubnetD42(t.TypedDict):
+    network: str
+    mask_bits: str
     name: str
     description: str
     notes: str
@@ -144,6 +153,8 @@ D42_Host = config["d42"]["HOST"]
 InfoBloxClient = RestClient(Info_User, Info_Pass, Info_Host)
 D42Client = RestClient(D42_User, D42_Pass, D42_Host)
 
+"""-------------------- Infoblox Methods --------------------"""
+
 
 def InfoBoxPagination(
     url: str,
@@ -183,7 +194,10 @@ def add_network_ignore_voip(
     def filter_good_res(network: NETWORKBASE) -> bool:
         """We only care about networks that aren't VoIP"""
         view = network.get("network_view")
-        return True if (view and "voip" not in view.lower()) else False
+        if view and "voip" not in view.lower():
+            post_network(t.cast(NETWORK, network))
+            return True
+        return False
 
     json_res.extend(filter(filter_good_res, results))
 
@@ -249,41 +263,57 @@ def get_all_IPs() -> None:
 
 
 def get_all_devices() -> None:
-    with open("data/networks.json") as f:
-        networks = json.load(f)
-        for network in networks:
-            print("Checking out:", network["network"])
-            json_res: t.List[IPV4ADDRESS] = []
-            for res in InfoBoxPagination(
-                "ipv4address",
-                {
-                    "network": network["network"],
-                    "network_view": network["network_view"],
-                    # We want _any_ipv4address that contains a mac_address
-                    # This means that it's an actual physical machine
-                    "mac_address~": ".+",
-                    # We don't care about IPs that aren't used
-                    "status": "USED",
-                    # Discovered DATA includes such info
-                    "_return_fields+": ["discovered_data"],
-                },
-            ):
-                if type(res) == list:
-                    json_res.extend(t.cast(t.List[IPV4ADDRESS], res))
-                else:
-                    json_res.append(t.cast(IPV4ADDRESS, res))
-            # Save data to some file
-            file_name = (
-                f"data/devices_{network['network'].replace('/', '_to_')}.json"
-            )
-            with open(file_name, "w") as f:
-                json.dump(json_res, f, ensure_ascii=False, indent=2)
-                print("Written results in: ", file_name)
+    def print_device_to_json(network: NETWORKBASE) -> None:
+        print("Checking out:", network["network"])
+        json_res: t.List[IPV4ADDRESS] = []
+        for res in InfoBoxPagination(
+            "ipv4address",
+            {
+                "network": network["network"],
+                "network_view": network["network_view"],
+                # We want _any_ipv4address that contains a mac_address
+                # This means that it's an actual physical machine
+                "mac_address~": ".+",
+                # We don't care about IPs that aren't used
+                "status": "USED",
+                # Discovered DATA includes such info
+                "_return_fields+": ["discovered_data"],
+            },
+        ):
+            if type(res) == list:
+                json_res.extend(t.cast(t.List[IPV4ADDRESS], res))
+            else:
+                json_res.append(t.cast(IPV4ADDRESS, res))
+        # Save data to some file
+        file_name = (
+            f"data/devices_{network['network'].replace('/', '_to_')}.json"
+        )
+        with open(file_name, "w") as f:
+            json.dump(json_res, f, ensure_ascii=False, indent=2)
+            print("Written results in: ", file_name)
+
+    iterate_through_network(print_device_to_json)
+
+
+"""-------------------- Device42 Methods --------------------"""
+
+
+def post_network(json_data: NETWORK) -> t.Tuple[t.Optional[int], str]:
+    vlan_id, err = get_VLAN_id(json_data)
+    network, mask = json_data["network"].split("/")
+    new_subnet = {
+        "network": network,
+        "mask": mask,
+        "vlan_id": vlan_id,
+        "name": json_data.get("comment"),
+        "notes": err,
+    }
+    return None, "TODO: figure out assigned and allocated"
 
 
 def check_repeat_number_vlan(
     old_vlans: t.List[VlanD42], new_vlan: VlanD42
-) -> bool:
+) -> t.Optional[VlanD42]:
     """VLANS are supposed to have the same number
     But sometimes, due to human error these things end up having the same
     number. Whoopsie
@@ -297,55 +327,78 @@ def check_repeat_number_vlan(
             and old_vlan["description"] == new_vlan["description"]
         ):
             # Nothing todo
-            return False
+            return old_vlan
     # Whoopsie...
     # This means that the new_vlan wasn't the same as _any of the existing
     # vlans in the attributes we care about.
     # This means that we have to create a new VLAN
-    return True
+    return None
 
 
-def post_vlan(subnet: NETWORK, client: RestClient = D42Client) -> None:
-    # Ignoring types here because of Mypy issues...
-    # See: https://github.com/python/mypy/issues/4359
-    # AND: https://github.com/python/mypy/issues/4122#issuecomment-336924377
+def get_VLAN_id(
+    subnet: NETWORK, client: RestClient = D42Client
+) -> t.Tuple[t.Optional[int], str]:
+    """Get the VLAN ID for a given NETWORK.
+
+    Returns:  (int | None, ErrString)
+
+    The  ErrString is useful for when we receive bad data from the network
+    itself (value is a range, or a string, etc)
+
+    If the VLAN doesn't exist on the client, then we make a post asking politely
+    for one to be added.
+
+    This function _can_ be recursive, becasue some times the value of a VLAN
+    is a range! This is dreadfully hairy, but if this happens we just return
+    the first non-null value.
+
+    If you're wondering why there's so many casts and mypy-ignore.
+    Well...
+    See: https://github.com/python/mypy/issues/4359
+    AND: https://github.com/python/mypy/issues/4122#issuecomment-336924377
+    """
     if (
         subnet.get("extattrs") is None
         or subnet["extattrs"].get("VLAN") is None
     ):
-        return None
+        # Nothing todo...
+        return None, ""
 
-    vlan = subnet["extattrs"]["VLAN"]
-    name: str = subnet.get("comment", "")
+    vlan: ExtraInfo = subnet["extattrs"]["VLAN"]
+
     try:
         split_value = list(map(int, vlan["value"].split("-")))
-    except ValueError:
-        # Will happen when people put a non int-able string in the value
-        # It's just human error, we don't much care about it
-        print("\tWarning 🚨: Could not transfer a VLAN!")
-        pprint(subnet)
-        return
+        assert len(split_value) in (1, 2)
+    except (ValueError, AssertionError):
+        return None, f'Warning 🚨: Could not decypher the VLAN: {vlan["value"]}'
 
     if len(split_value) == 2:
         """...shit
         The infoblox data isn't exactly the finest
         Some of the VLAN values are actually a hyphen separated range.
-        If so, we have to loop this function over itself
+        Recursion time then!
         """
+        multiple_results: t.List[t.Optional[int]] = []
         for new_number in range(split_value[0], split_value[1] + 1):
-            mini_subnet = {
+            mini_subnet: NETWORK = {
                 **subnet,  # type: ignore
                 "extattrs": {"VLAN": {"value": str(new_number)}},
             }
-            post_vlan(
-                mini_subnet,  # type: ignore
-                client,
+            multiple_results.append(
+                get_VLAN_id(
+                    mini_subnet,
+                    client,
+                )[0]
             )
-        return
+        return (
+            next(id for id in multiple_results if id is not None),
+            f'Warning 🚨: found multiple VLANS: {vlan["value"]}',
+        )
 
     json_data: VlanD42 = {
         "number": vlan["value"],
-        "name": name,
+        # Max len of name is 64...
+        "name": subnet.get("comment", "")[:64],
         "description": f"Vlan for subnetwork {subnet['network']}",
         "notes": (
             "Warning This entry was automatically generated by a "
@@ -360,47 +413,46 @@ def post_vlan(subnet: NETWORK, client: RestClient = D42Client) -> None:
         .get("vlans", [])
     )
 
-    if check_repeat_number_vlan(previous_vlans, json_data):
-        # Ok, we _have_ to create a whole new VLAN
-        if len(previous_vlans) != 0:
-            json_data["notes"] = (
-                "Warning 🚨: Two VLANS have the same number! "
-                "This is likely a mistake\n"
-                f"{json_data['notes']}"
-            )
+    old_vlan = check_repeat_number_vlan(previous_vlans, json_data)
 
-        # BUG: I forgot the way these baboons wanted their data sent...
-        """
-        yo = client.request(
-            "vlans",
-data=json_data,  # type: ignore
-            method="POST",
-        )
-yo
-<Response [500]>
-import curlify
-curlify.to_curl(yo.request)
-"curl -X POST -H 'Accept: */*' -H 'Accept-Encoding: gzip, deflate' -H 'Authorization: Basic YWRtaW46YWRtIW5kNDI=' -H 'Connection: keep-alive' -H 'Content-Length: 0' -H 'User-Agent: python-requests/2.25.0' https://device42.dt.ept.lu/api/1.0/vlans"
-yo = client.request(
-            "vlans",
-json_data=json_data,  # type: ignore
-            method="POST",
-        )
-curlify.to_curl(yo.request)
-'curl -X POST -H \'Accept: */*\' -H \'Accept-Encoding: gzip, deflate\' -H \'Authorization: Basic YWRtaW46YWRtIW5kNDI=\' -H \'Connection: keep-alive\' -H \'Content-Length: 292\' -H \'Content-Type: application/json\' -H \'User-Agent: python-requests/2.25.0\' -d \'{"number": "4000", "name": "DMZ_101 - FREE", "description": "Vlan for subnetwork 192.168.101.192/28", "notes": "Warning \\ud83d\\udea8: Two VLANS have the same number! This is likely a mistake\\nWarning This entry was automatically generated by a script that queries Infoblox! Use with caution"}\' https://device42.dt.ept.lu/api/1.0/vlans'
+    if old_vlan is not None:
+        return int(old_vlan["vlan_id"]), ""
 
-        """
-        client.request(
-            "vlans/",
-            data=json_data,  # type: ignore
-            method="POST",
+    # Ok, we _have_ to create a whole new VLAN
+    if len(previous_vlans) > 1:
+        json_data["notes"] = (
+            "Warning 🚨: Two VLANS have the same number! "
+            "This is likely a mistake\n"
+            f"{json_data['notes']}"
         )
+
+    """
+    # D42 is particularly annoying with the bloody posts...
+    # todo: REFACTOR RestClient
+    client.request(
+        "vlans/",
+        data=json_data,  # type: ignore
+        method="POST",
+    )
+    """
+    res: Response = client.session().request(
+        method="POST",
+        url=f"{D42_Host}vlans/",
+        data=json_data,
+    )
+    if res.status_code == 200:
+        # See this:
+        # https://api.device42.com/#!/IPAM/getIPAMvlans
+        return int(res.json()["msg"][1]), ""
+    raise RequestException(res.json()["msg"])
 
 
 def post_all_VLANs() -> None:
     # We're safe to cast post_vlan since we check apply the necessary checks
     # and balances inside the function itself
-    iterate_through_network(t.cast(t.Callable[[NETWORKBASE], None], post_vlan))
+    iterate_through_network(
+        t.cast(t.Callable[[NETWORKBASE], None], get_VLAN_id)
+    )
 
 
 if __name__ == "__main__":
