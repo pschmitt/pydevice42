@@ -4,13 +4,12 @@ from configparser import ConfigParser
 from functools import partial
 
 import urllib3
-from requests import RequestException, Response, Session, Request
+from requests import RequestException, Response, Session
 
 # Use this magnificent library to convert a request to a curl string!
 # Super useful for testing purposes
-import curlify
-
-from pprint import pprint
+# import curlify
+# from pprint import pprint
 
 
 """-------------------- Typing shenanigans  --------------------"""
@@ -67,6 +66,8 @@ class IPV4ADDRESS(t.TypedDict):
 
 
 class VlanD42(t.TypedDict, total=False):
+    """ 🚨 DEPRECATED 🚨 - We've decided not to add any VLANS to device42 """
+
     number: str
     name: str
     description: str
@@ -186,57 +187,45 @@ def InfoBoxPagination(
         next_page = res_json.get("next_page_id")
 
 
-def add_network_ignore_voip(
-    results: t.List[NETWORKBASE],
-    json_res: t.List[NETWORKBASE],
-) -> None:
-    """ Adds networks we care about to some json_res!"""
-
-    def filter_good_res(network: NETWORKBASE) -> bool:
-        """We only care about networks that aren't VoIP"""
-        view = network.get("network_view")
-        if view and "voip" not in view.lower():
-            post_network(t.cast(NETWORK, network))
-            return True
-        return False
-
-    json_res.extend(filter(filter_good_res, results))
-
-
-def get_all_networks() -> None:
+def get_all_networks(
+    client: RestClient = InfoBloxClient,
+) -> t.Iterable[t.List[NETWORKBASE]]:
     """
     Get all of the network ranges we're interested in
-    By get, I mostly mean save to a file in `data/networks.json`
     """
-    json_res: t.List[NETWORKBASE] = []
-    print("Searching all available networks")
-    # url/network?network=100.65.0.0/23&_return_as_object=1&_paging=1&_max_results=1&_return_fields+=...
-    for page in InfoBoxPagination(
-        "network",
-        {
-            "_return_fields+": ["network", "extattrs", "network_view"],
-            "network_view": "DT-internal",
-        },
-    ):
-        add_network_ignore_voip(t.cast(t.List[NETWORKBASE], page), json_res)
-
-    fname = "data/networks_meta.json"
-    with open(fname, "w") as f:
-        f.write(str(json_res))
-
-    print("\tAll done! Check the results in:")
-    print(f"\t{fname}")
+    yield from t.cast(
+        t.Iterable[t.List[NETWORKBASE]],
+        InfoBoxPagination(
+            "network",
+            {
+                "_return_fields+": [
+                    "network",
+                    "extattrs",
+                    "network_view",
+                ],
+                "network_view": "DT-internal",
+            },
+            client=client,
+        ),
+    )
 
 
-def iterate_through_network(callable: t.Callable[[NETWORKBASE], None]) -> None:
-    print("Iterating through all networks in `data/networks.json`")
-    with open("data/networks.json") as f:
-        networks = json.load(f)
-        for network in networks:
+def iterate_through_network(
+    callable: t.Callable[[NETWORKBASE], None],
+    client: RestClient = InfoBloxClient,
+) -> None:
+    """Helper function that simply loops through each individual
+    network and calls some lambda.
+
+    Networks come as as a list from get_all_networks, which is
+    slightly annoying, so this function just sorts that out for us
+    """
+    for network_list in get_all_networks(client):
+        for network in network_list:
             callable(network)
 
 
-def get_all_IPs() -> None:
+def get_all_IPs(client: RestClient = InfoBloxClient) -> None:
     def print_subnet_to_json(network: NETWORKBASE) -> None:
         print("\tChecking out:", network["network"])
         json_res: t.List[IPV4ADDRESS] = []
@@ -251,8 +240,10 @@ def get_all_IPs() -> None:
                 # Discovered DATA includes such info
                 "_return_fields+": "discovered_data",
             },
+            client=client,
         ):
-            json_res.extend(t.cast(t.List[IPV4ADDRESS], res))
+            ipv4 = t.cast(t.List[IPV4ADDRESS], res)
+            json_res.extend(ipv4)
 
         # Save data to some file
         file_name = f"data/ips/{network['network'].replace('/', '_to_')}.json"
@@ -263,7 +254,7 @@ def get_all_IPs() -> None:
     iterate_through_network(print_subnet_to_json)
 
 
-def get_all_devices() -> None:
+def get_all_devices(client: RestClient = InfoBloxClient) -> None:
     def print_device_to_json(network: NETWORKBASE) -> None:
         print("Checking out:", network["network"])
         json_res: t.List[IPV4ADDRESS] = []
@@ -280,11 +271,13 @@ def get_all_devices() -> None:
                 # Discovered DATA includes such info
                 "_return_fields+": ["discovered_data"],
             },
+            client=client,
         ):
             if type(res) == list:
                 json_res.extend(t.cast(t.List[IPV4ADDRESS], res))
             else:
                 json_res.append(t.cast(IPV4ADDRESS, res))
+
         # Save data to some file
         file_name = (
             f"data/devices_{network['network'].replace('/', '_to_')}.json"
@@ -299,28 +292,68 @@ def get_all_devices() -> None:
 """-------------------- Device42 Methods --------------------"""
 
 
+def post_all_networks(
+    client: RestClient = InfoBloxClient, save_to_file: bool = True
+) -> None:
+    """
+    Saves all Infoblox Networks in a json file!
+    """
+
+    def add_network_ignore_voip(
+        results: t.List[NETWORKBASE],
+        json_res: t.List[NETWORKBASE],
+    ) -> None:
+        """ Adds networks we care about to some json_res!"""
+
+        def filter_good_res(network: NETWORKBASE) -> bool:
+            """We only care about networks that aren't VoIP"""
+            view = network.get("network_view")
+            if view and "voip" not in view.lower():
+                post_network(t.cast(NETWORK, network))
+                return True
+            return False
+
+        json_res.extend(filter(filter_good_res, results))
+
+    json_res: t.List[NETWORKBASE] = []
+    print("Searching all available networks")
+    for page in get_all_networks(client):
+        add_network_ignore_voip(page, json_res)
+
+    if not save_to_file:
+        return None
+
+    fname = "data/networks.json"
+    with open(fname, "w") as f:
+        f.write(str(json_res))
+
+    print("\tAll done! Check the results in:")
+    print(f"\t{fname}")
+
+
 def post_network(json_data: NETWORK) -> t.Tuple[t.Optional[int], str]:
-    vlan_id, err = get_VLAN_id(json_data)
     network, mask = json_data["network"].split("/")
     new_subnet = {
         "network": network,
         "mask_bits": mask,
-        "parent_vlan_id": vlan_id,
         "name": json_data.get("comment", ""),
-        "notes": err,
     }
-    req = Request("POST", url=f"{D42_Host}subnets/", data=new_subnet)
-    prepared = D42Client.session().prepare_request(req)
-    pprint(prepared)
-    print(curlify.to_curl(prepared))
-    D42Client.session().send(prepared)
-    return None, "TODO: figure out assigned and allocated"
+    res = D42Client.session().request(
+        "POST", url=f"{D42_Host}subnets/", data=new_subnet
+    )
+    js = res.json()
+    if res.status_code == 200:
+        # See this:
+        # https://api.device42.com/#!/IPAM/postIPAMsubnets
+        return int(js["code"]), " ".join(map(str, js))
+    raise RequestException(js["msg"])
 
 
 def check_repeat_number_vlan(
     old_vlans: t.List[VlanD42], new_vlan: VlanD42
 ) -> t.Optional[VlanD42]:
-    """VLANS are supposed to have the same number
+    """🚨 DEPRECATED 🚨 - We've decided not to add any VLANS to device42
+    VLANS are supposed to have the same number
     But sometimes, due to human error these things end up having the same
     number. Whoopsie
 
@@ -344,7 +377,9 @@ def check_repeat_number_vlan(
 def get_VLAN_id(
     subnet: NETWORK, client: RestClient = D42Client
 ) -> t.Tuple[t.Optional[int], str]:
-    """Get the VLAN ID for a given NETWORK.
+    """🚨 DEPRECATED 🚨 - We've decided not to add any VLANS to device42
+
+    Get the VLAN ID for a given NETWORK.
 
     Returns:  (int | None, ErrString)
 
@@ -458,6 +493,7 @@ def get_VLAN_id(
 
 
 def post_all_VLANs() -> None:
+    """ 🚨 DEPRECATED 🚨 - We've decided not to add any VLANS to device42 """
     # We're safe to cast post_vlan since we check apply the necessary checks
     # and balances inside the function itself
     iterate_through_network(
@@ -466,7 +502,5 @@ def post_all_VLANs() -> None:
 
 
 if __name__ == "__main__":
-    get_all_networks()
+    post_all_networks()
     # get_all_IPs()
-    # get_all_devices()
-    # post_all_VLANs()
