@@ -2,13 +2,13 @@ import typing as t
 from functools import partial
 
 import urllib3
-from requests import Response, Session, RequestException
+from requests import RequestException, Response, Session
 
 from .types import (
-    Subnet,
-    ServiceInstanceCustomField,
-    CustomFieldBase,
     HTTP_METHODS,
+    CustomFieldBase,
+    ServiceInstanceCustomField,
+    Subnet,
 )
 
 

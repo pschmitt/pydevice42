@@ -1,10 +1,9 @@
-from typing import TypedDict, Optional, Union, Literal, TypeVar
+from typing import Literal, Optional, TypedDict, TypeVar, Union
 
 JSON_Values = Union[str, int, float, bool, None]
 HTTP_METHODS = Literal["GET", "POST", "PUT"]
 STATUS = Literal["USED", "UNUSED"]
 T = TypeVar("T")
-
 
 class Vlan(TypedDict, total=False):
     number: str
@@ -13,7 +12,6 @@ class Vlan(TypedDict, total=False):
     notes: str
     vlan_id: str
 
-
 class Subnet(TypedDict):
     network: str
     mask_bits: str
@@ -21,12 +19,10 @@ class Subnet(TypedDict):
     description: str
     notes: str
 
-
 class StorageServiceInstance(TypedDict):
     service_name: Literal["storage_service"]
     # id that points over to a Clustered Device that houses our LUNS!
     device_id: int
-
 
 class CustomFieldBase(TypedDict):
     """
@@ -40,7 +36,6 @@ class CustomFieldBase(TypedDict):
     id: int
     key: str
     value: str
-
 
 class ServiceInstanceCustomField(CustomFieldBase, total=False):
     """POST/PUT: /api/1.0/custom_fields/serviceinstance
