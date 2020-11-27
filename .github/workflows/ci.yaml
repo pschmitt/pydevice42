@@ -47,7 +47,7 @@ jobs:
 
       - name: isort
         run: |
-          isort --check --diff --verbose
+          isort --check --diff --verbose .
 
   black:
     runs-on: ubuntu-latest
