@@ -1,5 +1,5 @@
 [tool.poetry]
-name = "InfobloxQuery"
+name = "pydevice42"
 version = "0.1.0"
 description = "Enhancements to the Sync scripts for Device42"
 authors = ["Joaquim Esteves <joaquimbve@hotmail.com>"]
