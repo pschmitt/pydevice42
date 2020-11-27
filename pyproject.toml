@@ -3,6 +3,7 @@ name = "pydevice42"
 version = "0.1.0"
 description = "Enhancements to the Sync scripts for Device42"
 authors = ["Joaquim Esteves <joaquimbve@hotmail.com>"]
+include = ["pydevice42/py.typed"]
 
 [tool.poetry.dependencies]
 python = "^3.8"
