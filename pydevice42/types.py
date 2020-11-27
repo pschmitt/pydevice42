@@ -14,10 +14,13 @@ class Vlan(TypedDict, total=False):
     vlan_id: str
 
 
-class Subnet(TypedDict):
+class SubnetBase(TypedDict):
     network: str
     mask_bits: str
     name: str
+
+
+class Subnet(SubnetBase, total=False):
     description: str
     notes: str
 
