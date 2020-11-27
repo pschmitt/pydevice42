@@ -4,8 +4,12 @@ from functools import partial
 import urllib3
 from requests import RequestException, Response, Session
 
-from .types import (HTTP_METHODS, CustomFieldBase, ServiceInstanceCustomField,
-                    Subnet)
+from .types import (
+    HTTP_METHODS,
+    CustomFieldBase,
+    ServiceInstanceCustomField,
+    Subnet,
+)
 
 
 class RestClient:
