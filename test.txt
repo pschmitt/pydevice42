@@ -1,0 +1,2 @@
+curl  -k -X PUT -H 'Accept: */*' -H 'Accept-Encoding: gzip, deflate' -H 'Authorization: Basic YWRtaW46YWRtIW5kNDI=' -H 'Connection: keep-alive' -H 'Content-Type: application/x-www-form-urlencoded' -d 'id=13&key=custom_data&value={"ayyyyy": "lmao"}' 'https://device42.dt.ept.lu/api/1.0/custom_fields
+/serviceinstance/'
