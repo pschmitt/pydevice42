@@ -1,0 +1,13 @@
+import os
+
+from pydevice42 import D42Client
+
+client = D42Client(
+    hostname=os.environ.get("D42_HOSTNAME"),
+    username=os.environ.get("D42_USERNAME"),
+    password=os.environ.get("D42_PASSWORD"),
+    insecure=os.environ.get("D42_INSECURE").lower() == "true"
+)
+
+import logging
+logging.basicConfig(level=logging.DEBUG)
