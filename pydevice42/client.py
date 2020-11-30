@@ -3,16 +3,21 @@ import typing as t
 from functools import partial
 
 import urllib3
-from requests import RequestException, Response, Session
+from requests import Response, Session
 
 from .types import (
     HTTP_METHODS,
     CustomFieldBase,
+    JSON_Res,
     ServiceInstanceCustomField,
     Subnet,
 )
 
 LOGGER = logging.getLogger(__name__)
+
+
+class ReturnCodeException(Exception):
+    pass
 
 
 class RestClient:
@@ -28,12 +33,14 @@ class RestClient:
         username: str,
         password: str,
         insecure: bool = False,
+        port: int = 443,
     ) -> None:
         self._username = username
         self._password = password
         self._hostname = hostname
-        self._session: t.Optional[Session] = None
         self._insecure = insecure
+        self._port = port
+        self.session: Session = self.prepareSession()
 
     def prepareSession(self) -> Session:
         s = Session()
@@ -45,11 +52,6 @@ class RestClient:
         self._session = s
         return self._session
 
-    def session(self) -> Session:
-        if self._session:
-            return self._session
-        return self.prepareSession()
-
     def request(
         self,
         url: str,
@@ -59,9 +61,9 @@ class RestClient:
         method: HTTP_METHODS = "GET",
     ) -> Response:
         request = partial(
-            self.session().request,
+            self.session.request,
             method,
-            f"https://{self._hostname}{url}",
+            f"https://{self._hostname}:{self._port}{url}",
             params=params,
             json=json,
             data=data,
@@ -82,39 +84,43 @@ class RestClient:
 
 
 class D42Client(RestClient):
-    def _check_err(self, res: Response) -> t.Tuple[int, str]:
-        """Collect the error like so:
+    def _check_err(self, jres: t.Any) -> JSON_Res:
+        """POST and PUT method validation
 
-        ```python
-        >>> e = RequestException(res)
-        >>> type(e.args[0]) == Response
-        True
-        ```
+        Raises exception if the return code isn't 0.
 
-        You can also get the request by doing:
-
-        ```python
-        >>> # This is useful to debug the body of a function or to use curlify
-        >>> RequestException(res).args[0].request
-        >>> curlify.to_curl(RequestException(res).args[0].request)
-        "curl -X GET -H 'Accept: */*' -H '..."
-        ```
-
+        Else, returns the message from the server.
+        This is _generally_ a t.List[t.Any], but I have generalised it to
+        be any type of JSON_Res
         """
-        js = res.json()
-        if res.status_code == 200:
-            # See this as an example:
-            # https://api.device42.com/#!/IPAM/postIPAMsubnets
-            return int(js["code"]), " ".join(map(str, js.get("msg", [])))
-        raise RequestException(res)
+        ret_code = int(jres["code"])
+        ret_msg = t.cast(t.List[t.Any], jres.get("msg", []))
+        if ret_code != 0:
+            raise ReturnCodeException(" ".join(map(str, ret_msg)))
+        return t.cast(JSON_Res, ret_msg)
 
-    def post_network(self, new_subnet: Subnet) -> t.Tuple[int, str]:
-        return self._check_err(
-            self.request(
-                url="/api/1.0/subnets/",
-                method="POST",
-                data=t.cast(t.Dict[str, t.Any], new_subnet),
-            )
+    def _request(
+        self,
+        endpoint: str,
+        params: t.Optional[t.Dict[str, t.Any]] = None,
+        json: t.Optional[t.Dict[str, t.Any]] = None,
+        data: t.Optional[t.Dict[str, t.Any]] = None,
+        method: HTTP_METHODS = "GET",
+    ) -> JSON_Res:
+        res = self.request(
+            url=endpoint, params=params, json=json, data=data, method=method
+        )
+        res.raise_for_status()
+        jres: JSON_Res = res.json()
+        if method in ["POST", "PUT"]:
+            return self._check_err(jres)
+        return jres
+
+    def post_network(self, new_subnet: Subnet) -> JSON_Res:
+        return self._request(
+            endpoint="/api/1.0/subnets/",
+            method="POST",
+            data=t.cast(t.Dict[str, t.Any], new_subnet),
         )
 
     def _get_DOQL_query(self, query_name: str) -> t.Any:
@@ -124,9 +130,9 @@ class D42Client(RestClient):
 
         They have to be coded by the user.
         """
-        res = self.request(
+        return self._request(
             method="GET",
-            url="/services/data/v1.0/query/",
+            endpoint="/services/data/v1.0/query/",
             params={
                 "saved_query_name": query_name,
                 "delimiter": "",
@@ -134,9 +140,6 @@ class D42Client(RestClient):
                 "output_type": "json",
             },
         )
-        if res.status_code != 200:
-            raise RequestException(res)
-        return res.json()
 
     def get_custom_fields_of_service_instances(
         self, save_to_file: bool = False
@@ -153,7 +156,7 @@ class D42Client(RestClient):
 
     def update_custom_field_service_instance(
         self, cf: CustomFieldBase
-    ) -> t.Tuple[int, str]:
+    ) -> JSON_Res:
         """Note that CustomFieldBase's `value` is a string!
 
         This means that if you're inputting a json as a custom field
@@ -187,10 +190,14 @@ class D42Client(RestClient):
         (0, 'custom key pair values added or updated ...')
         ```
         """
-        return self._check_err(
-            self.request(
-                method="PUT",
-                url="/api/1.0/custom_fields/serviceinstance/",
-                data=t.cast(t.Dict[str, t.Any], cf),
-            )
+        return self._request(
+            method="PUT",
+            endpoint="/api/1.0/custom_fields/serviceinstance/",
+            data=t.cast(t.Dict[str, t.Any], cf),
+        )
+
+    def get_all_devices(self) -> JSON_Res:
+        return self._request(
+            method="GET",
+            endpoint="/api/1.0/devices/all/",
         )
