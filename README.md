@@ -14,5 +14,5 @@ pip install pydevice42
 ```python
 from pydevice42 import D42Client
 
-client = D42Client(host="d42.example.com", username="admin", password="admin")
+client = D42Client(hostname="device42.com", username="admin", password="admin")
 ```

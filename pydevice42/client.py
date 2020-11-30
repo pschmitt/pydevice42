@@ -1,3 +1,4 @@
+import logging
 import typing as t
 from functools import partial
 
@@ -10,6 +11,8 @@ from .types import (
     ServiceInstanceCustomField,
     Subnet,
 )
+
+LOGGER = logging.getLogger(__name__)
 
 
 class RestClient:
@@ -65,7 +68,9 @@ class RestClient:
             verify=not self._insecure,
         )
         try:
-            return request()
+            res = request()
+            LOGGER.debug(f"Request response: {res.text}")
+            return res
         except ConnectionResetError:
             """
             If we're making too many requests the server might reset the
