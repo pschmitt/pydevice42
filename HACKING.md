@@ -21,14 +21,14 @@ direnv allow
 With direnv:
 
 ```shell
-poetry run ipython -i hacking.ipy
+poetry run ipython -i devel/init.ipy
 ```
 
 Without direnv:
 
 ```shell
 source .envrc
-poetry run ipython -i hacking.ipy
+poetry run ipython -i devel/init.ipy
 ```
 
 Now you can play with the `client` object.
