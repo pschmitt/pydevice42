@@ -33,11 +33,13 @@ class RestClient:
         username: str,
         password: str,
         insecure: bool = False,
+        port: int = 443,
     ) -> None:
         self._username = username
         self._password = password
         self._hostname = hostname
         self._insecure = insecure
+        self._port = port
         self.session: Session = self.prepareSession()
 
     def prepareSession(self) -> Session:
@@ -61,7 +63,7 @@ class RestClient:
         request = partial(
             self.session.request,
             method,
-            f"https://{self._hostname}{url}",
+            f"https://{self._hostname}:{self._port}{url}",
             params=params,
             json=json,
             data=data,
@@ -99,14 +101,14 @@ class D42Client(RestClient):
 
     def _request(
         self,
-        url: str,
+        endpoint: str,
         params: t.Optional[t.Dict[str, t.Any]] = None,
         json: t.Optional[t.Dict[str, t.Any]] = None,
         data: t.Optional[t.Dict[str, t.Any]] = None,
         method: HTTP_METHODS = "GET",
     ) -> JSON_Res:
         res = self.request(
-            url=url, params=params, json=json, data=data, method=method
+            url=endpoint, params=params, json=json, data=data, method=method
         )
         res.raise_for_status()
         jres: JSON_Res = res.json()
@@ -116,7 +118,7 @@ class D42Client(RestClient):
 
     def post_network(self, new_subnet: Subnet) -> JSON_Res:
         return self._request(
-            url="/api/1.0/subnets/",
+            endpoint="/api/1.0/subnets/",
             method="POST",
             data=t.cast(t.Dict[str, t.Any], new_subnet),
         )
@@ -130,7 +132,7 @@ class D42Client(RestClient):
         """
         return self._request(
             method="GET",
-            url="/services/data/v1.0/query/",
+            endpoint="/services/data/v1.0/query/",
             params={
                 "saved_query_name": query_name,
                 "delimiter": "",
@@ -190,12 +192,12 @@ class D42Client(RestClient):
         """
         return self._request(
             method="PUT",
-            url="/api/1.0/custom_fields/serviceinstance/",
+            endpoint="/api/1.0/custom_fields/serviceinstance/",
             data=t.cast(t.Dict[str, t.Any], cf),
         )
 
     def get_all_devices(self) -> JSON_Res:
         return self._request(
             method="GET",
-            url="/api/1.0/devices/all/",
+            endpoint="/api/1.0/devices/all/",
         )
