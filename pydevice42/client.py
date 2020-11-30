@@ -205,4 +205,9 @@ class D42Client(RestClient):
             url="/api/1.0/custom_fields/serviceinstance/",
             data=t.cast(t.Dict[str, t.Any], cf),
         )
+
+    def get_all_devices(self) -> t.Tuple[int, str]:
+        return self._request(
+            method="GET",
+            url="/api/1.0/devices/all/",
         )
