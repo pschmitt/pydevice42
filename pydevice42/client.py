@@ -82,7 +82,7 @@ class RestClient:
 
 
 class D42Client(RestClient):
-    def _check_err(self, res: Response) -> t.Tuple[int, str]:
+    def _check_err(self, res: t.Dict) -> t.Tuple[int, str]:
         """Collect the error like so:
 
         ```python
@@ -105,16 +105,32 @@ class D42Client(RestClient):
         if res.status_code == 200:
             # See this as an example:
             # https://api.device42.com/#!/IPAM/postIPAMsubnets
+            # TODO Raise amn exception when code != 0
             return int(js["code"]), " ".join(map(str, js.get("msg", [])))
         raise RequestException(res)
 
+    def _request(
+        self,
+        url: str,
+        params: t.Optional[t.Dict[str, t.Any]] = None,
+        json: t.Optional[t.Dict[str, t.Any]] = None,
+        data: t.Optional[t.Dict[str, t.Any]] = None,
+        method: HTTP_METHODS = "GET",
+    ) -> t.Dict:
+        res = self.request(
+            url=url, params=params, json=json, data=data, method=method
+        )
+        res.raise_for_status()
+        jres = res.json()
+        if method in ["POST", "PUT"]:
+            return self._check_err(jres)
+        return jres
+
     def post_network(self, new_subnet: Subnet) -> t.Tuple[int, str]:
-        return self._check_err(
-            self.request(
-                url="/api/1.0/subnets/",
-                method="POST",
-                data=t.cast(t.Dict[str, t.Any], new_subnet),
-            )
+        return self._request(
+            url="/api/1.0/subnets/",
+            method="POST",
+            data=t.cast(t.Dict[str, t.Any], new_subnet),
         )
 
     def _get_DOQL_query(self, query_name: str) -> t.Any:
@@ -124,7 +140,7 @@ class D42Client(RestClient):
 
         They have to be coded by the user.
         """
-        res = self.request(
+        return self._request(
             method="GET",
             url="/services/data/v1.0/query/",
             params={
@@ -134,9 +150,6 @@ class D42Client(RestClient):
                 "output_type": "json",
             },
         )
-        if res.status_code != 200:
-            raise RequestException(res)
-        return res.json()
 
     def get_custom_fields_of_service_instances(
         self, save_to_file: bool = False
@@ -187,10 +200,9 @@ class D42Client(RestClient):
         (0, 'custom key pair values added or updated ...')
         ```
         """
-        return self._check_err(
-            self.request(
-                method="PUT",
-                url="/api/1.0/custom_fields/serviceinstance/",
-                data=t.cast(t.Dict[str, t.Any], cf),
-            )
+        return self._request(
+            method="PUT",
+            url="/api/1.0/custom_fields/serviceinstance/",
+            data=t.cast(t.Dict[str, t.Any], cf),
+        )
         )
