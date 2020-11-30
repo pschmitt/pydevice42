@@ -1,15 +1,19 @@
 [tool.poetry]
 name = "pydevice42"
 version = "0.1.0"
-description = "Enhancements to the Sync scripts for Device42"
-authors = ["Joaquim Esteves <joaquimbve@hotmail.com>"]
+description = "Python library to interact with Device42"
+authors = ["Joaquim Esteves <joaquimbve@hotmail.com>", "Philipp Schmitt <philipp.schmitt@post.lu>"]
+license = "GPL-3.0-only"
+homepage = "https://github.com/post-luxembourg/pydevice42"
+readme = "README.md"
 include = ["pydevice42/py.typed"]
+classifiers = [
+  "Typing :: Typed"
+]
 
 [tool.poetry.dependencies]
 python = "^3.8"
 requests = "^2.25.0"
-# Doesn't work properly for me :(
-# infoblox-client = "^0.5.0"
 
 [tool.poetry.dev-dependencies]
 curlify = "^2.2.1"
