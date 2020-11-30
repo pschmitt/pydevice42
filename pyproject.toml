@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "pydevice42"
-version = "0.1.0-1"
+version = "0.2.0"
 description = "Python library to interact with Device42"
 authors = ["Joaquim Esteves <joaquimbve@hotmail.com>", "Philipp Schmitt <philipp.schmitt@post.lu>"]
 license = "GPL-3.0-only"
