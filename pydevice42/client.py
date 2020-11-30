@@ -197,7 +197,81 @@ class D42Client(RestClient):
         )
 
     def get_all_devices(self) -> JSON_Res:
-        return self._request(
+        res = self._request(
             method="GET",
             endpoint="/api/1.0/devices/all/",
         )
+        return res.get("Devices")
+
+    def _paginated_request(
+        self, endpoint, method="GET", params={}, data=None, json=None, limit=100
+    ) -> JSON_Res:
+        res = []
+
+        request_num = 1
+        params["limit"] = limit
+        params["offset"] = 0
+
+        # First request
+        resp = self._request(
+            method=method,
+            endpoint=endpoint,
+            params=params,
+            data=data,
+            json=json,
+        )
+
+        # Guess the key that holds the values we are after
+        data_key = [
+            x
+            for x in resp.keys()
+            if x not in ["total_count", "offset", "limit"]
+        ][0]
+
+        # Append data
+        res += resp.get(data_key)
+
+        # Update counters
+        total_count = resp.get("total_count")
+        params["offset"] = limit
+
+        while len(res) < total_count:
+            request_num = request_num + 1
+            LOGGER.debug(
+                f"Processing request #{request_num} ({len(res)}/{total_count}) "
+                f"[Offset: {params['offset']} - Limit: {limit}]"
+            )
+
+            resp = self._request(
+                method=method,
+                endpoint=endpoint,
+                params=params,
+                data=data,
+                json=json,
+            )
+
+            # Harvest data
+            res += resp.get(data_key)
+
+            # Update counters
+            params["offset"] = resp.get("offset") + limit
+            total_count = resp.get("total_count")
+        return res
+
+    def get_service_instance(self) -> JSON_Res:
+        return self._request(
+            method="GET",
+            endpoint="/api/2.0/service_instances/",
+        )
+
+    def get_all_service_instances(self) -> JSON_Res:
+        service_instances = []
+
+        for dev in self.get_all_devices():
+            service_instances += self._request(
+                method="GET",
+                data={"device_id": dev.get("id")},
+                endpoint="/api/2.0/service_instances/",
+            ).get("service_details")
+
+        return service_instances
