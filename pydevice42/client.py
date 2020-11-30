@@ -19,18 +19,26 @@ class RestClient:
     This class is a simple namespace to get that sorted out for us
     """
 
-    def __init__(self, username: str, password: str, host: str) -> None:
+    def __init__(
+        self,
+        hostname: str,
+        username: str,
+        password: str,
+        insecure: bool = False,
+    ) -> None:
         self._username = username
         self._password = password
-        self._host = host
+        self._hostname = hostname
         self._session: t.Optional[Session] = None
+        self._insecure = insecure
 
     def prepareSession(self) -> Session:
-        # Disable certificate warnings
-        urllib3.disable_warnings()
         s = Session()
         s.auth = (self._username, self._password)
-        s.verify = False
+        if self._insecure:
+            # Disable certificate warnings
+            urllib3.disable_warnings()
+            s.verify = False
         self._session = s
         return self._session
 
@@ -50,10 +58,11 @@ class RestClient:
         request = partial(
             self.session().request,
             method,
-            f"{self._host}{url}",
+            f"https://{self._hostname}{url}",
             params=params,
             json=json,
             data=data,
+            verify=not self._insecure,
         )
         try:
             return request()
