@@ -206,7 +206,7 @@ class D42Client(RestClient):
             data=t.cast(t.Dict[str, t.Any], cf),
         )
 
-    def get_all_devices(self) -> t.Tuple[int, str]:
+    def get_all_devices(self) -> t.Dict:
         return self._request(
             method="GET",
             url="/api/1.0/devices/all/",
