@@ -1,0 +1,4 @@
+export D42_HOSTNAME=device42.com
+export D42_USERNAME=admin
+export D42_PASSWORD=admin
+export D42_INSECURE=true
