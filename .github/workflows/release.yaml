@@ -1,11 +1,11 @@
-name: Upload Python Package
+name: PyPI release
 
 on:
   release:
     types: [created]
-  push:
-    tags:
-      - 'v*'
+  # push:
+  #   tags:
+  #     - 'v*'
 
 jobs:
   release:
