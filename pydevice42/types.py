@@ -1,6 +1,22 @@
-from typing import Literal, Optional, TypedDict, TypeVar, Union
+from typing import Dict, List, Literal, Optional, TypedDict, TypeVar, Union
 
+# Representing JSON is notoriously tricky in mypy
+# Here's the best attempt I have so far
+# A JSON_RES is either a list of JSON_DICTS, or just a straight up JSON_DICT
+# JSON_LIST contains JSON_DICTS
+# And a JSON_DICT is a simple map to acceptable JSON_VALUES
+# So JSONS that contain JSONS are not acceptable, because MYPY can't represent
+# self-referential values
+# Meaning that if we get some sort of fancy value, we have to cast it
+# to the appropriately typed dict
 JSON_Values = Union[str, int, float, bool, None]
+
+JSON_Dict = Dict[str, JSON_Values]
+
+JSON_List = List[JSON_Dict]
+
+JSON_Res = Union[JSON_List, JSON_Dict]
+
 HTTP_METHODS = Literal["GET", "POST", "PUT"]
 STATUS = Literal["USED", "UNUSED"]
 T = TypeVar("T")
