@@ -1,4 +1,4 @@
-from typing import Dict, List, Literal, Optional, TypedDict, TypeVar, Union, Any
+from typing import Any, Dict, List, Literal, Optional, TypedDict, TypeVar, Union
 
 # Representing JSON is notoriously tricky in mypy
 # Here's the best attempt I have so far
