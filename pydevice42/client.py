@@ -9,6 +9,8 @@ from .types import (
     HTTP_METHODS,
     CustomFieldBase,
     JSON_Res,
+    JSON_Dict,
+    JSON_List,
     ServiceInstanceCustomField,
     Subnet,
 )
@@ -106,7 +108,7 @@ class D42Client(RestClient):
         json: t.Optional[t.Dict[str, t.Any]] = None,
         data: t.Optional[t.Dict[str, t.Any]] = None,
         method: HTTP_METHODS = "GET",
-    ) -> JSON_Res:
+    ) -> JSON_Dict:
         res = self.request(
             url=endpoint, params=params, json=json, data=data, method=method
         )
@@ -116,11 +118,73 @@ class D42Client(RestClient):
             return self._check_err(jres)
         return jres
 
+    def _paginated_request(
+        self,
+        endpoint: str,
+        # FIXME Is there any paginated *non-* GET request?
+        method: HTTP_METHODS = "GET",
+        params: t.Dict = {},
+        data: t.Dict = {},
+        json: t.Dict = {},
+        limit: int = 1000,
+    ) -> JSON_Res:
+        res: t.List = []
+
+        request_num = 1
+        params["limit"] = limit
+        params["offset"] = 0
+
+        # First request
+        resp = self._request(
+            method=method,
+            endpoint=endpoint,
+            params=params,
+            data=data,
+            json=json,
+        )
+
+        # Guess the key that holds the values we are after
+        data_key = [
+            x
+            for x in resp.keys()
+            if x not in ["total_count", "offset", "limit"]
+        ][0]
+
+        # Append data
+        res += t.cast(t.Dict[str, t.Any], resp.get(data_key))
+
+        # Update counters
+        total_count = int(t.cast(int, resp.get("total_count")))
+        params["offset"] = limit
+
+        while len(res) < total_count:
+            request_num = request_num + 1
+            LOGGER.debug(
+                f"Processing request #{request_num} ({len(res)}/{total_count}) "
+                f"[Offset: {params['offset']} - Limit: {limit}]"
+            )
+
+            resp = self._request(
+                method=method,
+                endpoint=endpoint,
+                params=params,
+                data=data,
+                json=json,
+            )
+
+            # Harvest data
+            res += t.cast(t.Dict, resp.get(data_key))
+
+            # Update counters
+            params["offset"] = int(resp.get("offset")) + limit
+            total_count = resp.get("total_count")
+        return res
+
     def post_network(self, new_subnet: Subnet) -> JSON_Res:
         return self._request(
             endpoint="/api/1.0/subnets/",
             method="POST",
-            data=t.cast(t.Dict[str, t.Any], new_subnet),
+            data=t.cast(t.Dict, new_subnet),
         )
 
     def _get_DOQL_query(self, query_name: str) -> t.Any:
@@ -203,75 +267,5 @@ class D42Client(RestClient):
         )
         return res.get("Devices")
 
-    def _paginated_request(
-        self, endpoint, method="GET", params={}, data=None, json=None, limit=100
-    ) -> JSON_Res:
-        res = []
-
-        request_num = 1
-        params["limit"] = limit
-        params["offset"] = 0
-
-        # First request
-        resp = self._request(
-            method=method,
-            endpoint=endpoint,
-            params=params,
-            data=data,
-            json=json,
-        )
-
-        # Guess the key that holds the values we are after
-        data_key = [
-            x
-            for x in resp.keys()
-            if x not in ["total_count", "offset", "limit"]
-        ][0]
-
-        # Append data
-        res += resp.get(data_key)
-
-        # Update counters
-        total_count = resp.get("total_count")
-        params["offset"] = limit
-
-        while len(res) < total_count:
-            request_num = request_num + 1
-            LOGGER.debug(
-                f"Processing request #{request_num} ({len(res)}/{total_count}) "
-                f"[Offset: {params['offset']} - Limit: {limit}]"
-            )
-
-            resp = self._request(
-                method=method,
-                endpoint=endpoint,
-                params=params,
-                data=data,
-                json=json,
-            )
-
-            # Harvest data
-            res += resp.get(data_key)
-
-            # Update counters
-            params["offset"] = resp.get("offset") + limit
-            total_count = resp.get("total_count")
-        return res
-
-    def get_service_instance(self) -> JSON_Res:
-        return self._request(
-            method="GET",
-            endpoint="/api/2.0/service_instances/",
-        )
-
     def get_all_service_instances(self) -> JSON_Res:
-        service_instances = []
-
-        for dev in self.get_all_devices():
-            service_instances += self._request(
-                method="GET",
-                data={"device_id": dev.get("id")},
-                endpoint="/api/2.0/service_instances/",
-            ).get("service_details")
-
-        return service_instances
+        return self._paginated_request("/api/2.0/service_instances/")
