@@ -86,16 +86,14 @@ class D42Client(BasicRestClient):
         # First request
         resp = page_request(updated_params)
 
-        # Remove unecessary stuff from the response
-        # Not actually implemented (naturally) - But you can just uncomment
-        # if you'd like
-        # new_resp = {
-        #     k: v
-        #     for k, v in resp.items()
-        #     if k not in ["total_count", "offset", "limit"]
-        # }
+        # Remove metadata from the response
+        resp_data = {
+            k: v
+            for k, v in resp.items()
+            if k not in ["total_count", "offset", "limit"]
+        }
 
-        yield resp
+        yield resp_data
 
         while request_num < tbx.int_cast(resp["total_count"]):
             updated_params["offset"] = tbx.int_cast(resp["offset"]) + limit
