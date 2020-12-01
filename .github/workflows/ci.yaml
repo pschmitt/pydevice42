@@ -3,7 +3,7 @@ name: CI
 on: [push, pull_request]
 
 jobs:
-  flake8:
+  flakehell:
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -23,12 +23,9 @@ jobs:
           pip install poetry
           poetry install
 
-      - name: Lint with flake8
+      - name: Lint with flakehell
         run: |
-          # stop the build if there are Python syntax errors or undefined names
-          poetry run flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
-          # exit-zero treats all errors as warnings. Set line length to 80 chars max.
-          poetry run flake8 . --count --exit-zero --max-complexity=10 --max-line-length=80 --statistics
+          poetry run flakehell lint --format=stat --count --max-complexity=10 --max-line-length=80
 
   isort:
     runs-on: ubuntu-latest
