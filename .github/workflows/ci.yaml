@@ -25,7 +25,7 @@ jobs:
 
       - name: Lint with flakehell
         run: |
-          poetry run flakehell lint --format=stat --count --max-complexity=10 --max-line-length=80
+          ./devel/ci.sh flakehell
 
   isort:
     runs-on: ubuntu-latest
@@ -40,11 +40,12 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install isort
+          pip install poetry
+          poetry install
 
       - name: isort
         run: |
-          isort --check --diff --verbose .
+          ./devel/ci.sh isort --check --diff --verbose .
 
   black:
     runs-on: ubuntu-latest
@@ -59,11 +60,12 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install black
+          pip install poetry
+          poetry install
 
       - name: Black
         run: |
-          black --config pyproject.toml --check --diff --verbose .
+          ./devel/ci.sh black --config pyproject.toml --check --diff --verbose .
 
   mypy:
     runs-on: ubuntu-latest
@@ -84,4 +86,4 @@ jobs:
 
       - name: mypy check
         run: |
-          poetry run python -m mypy --no-color-output .
+          ./devel/ci.sh mypy --no-color-output .
