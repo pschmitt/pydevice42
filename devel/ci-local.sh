@@ -8,8 +8,8 @@ check_isort() {
   poetry run isort .
 }
 
-check_flake8() {
-  poetry run flake8 .
+check_flakehell() {
+  poetry run flakehell lint --format=stat --count --max-complexity=10 --max-line-length=80
 }
 
 check_mypy() {
@@ -23,17 +23,27 @@ then
 
   set -ex
 
+  check_name="all"
+
   case "$1" in
-    black|isort|flake8|mypy)
+    flake8|pyflakes|flake|lint)
+      check_name="flakehell"
+      shift
+      ;;
+    black|isort|mypy)
       check_name="$1"
       shift
-      "check_${check_name}" "$@"
       ;;
-    *)
-      echo "Running all checks"
-      check_black
-      check_isort
-      check_flake8
-      check_mypy
   esac
+
+  if [[ "$check_name" == "all" ]]
+  then
+    echo "Running all checks" >&2
+    check_black
+    check_isort
+    check_flakehell
+    check_mypy
+  else
+    "check_${check_name}" "$@"
+  fi
 fi
