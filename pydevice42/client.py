@@ -8,9 +8,9 @@ from requests import Response, Session
 from .types import (
     HTTP_METHODS,
     CustomFieldBase,
-    JSON_Res,
     JSON_Dict,
     JSON_List,
+    JSON_Res,
     ServiceInstanceCustomField,
     Subnet,
 )
