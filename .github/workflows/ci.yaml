@@ -46,7 +46,7 @@ jobs:
 
       - name: isort
         run: |
-          ./devel/ci.sh isort --check --diff --verbose .
+          ./devel/ci.sh isort --check --diff --verbose
 
   black:
     runs-on: ubuntu-latest
@@ -66,7 +66,7 @@ jobs:
 
       - name: Black
         run: |
-          ./devel/ci.sh black --config pyproject.toml --check --diff --verbose .
+          ./devel/ci.sh black --config pyproject.toml --check --diff --verbose
 
   mypy:
     runs-on: ubuntu-latest
@@ -87,4 +87,4 @@ jobs:
 
       - name: mypy check
         run: |
-          ./devel/ci.sh mypy --no-color-output .
+          ./devel/ci.sh mypy --no-color-output
