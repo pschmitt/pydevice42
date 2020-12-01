@@ -10,7 +10,7 @@ client = D42Client(
 )
 
 import logging
-from pydevice42.client import LOGGER
+from pydevice42.logger import LOGGER
 
 logging.basicConfig()
 LOGGER.setLevel(

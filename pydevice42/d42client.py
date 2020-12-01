@@ -1,92 +1,16 @@
-import functools
 import json as js
-import logging
 import typing as t
 
 import requests
-import urllib3
 
+from . import exceptions as d42exc
+from . import toolbox as tbx
 from . import types as tt
-
-LOGGER = logging.getLogger(__name__)
-
-
-class Device42Exception(Exception):
-    pass
+from .basicrestclient import BasicRestClient
+from .logger import LOGGER
 
 
-class ReturnCodeException(Device42Exception):
-    pass
-
-
-class LicenseExpiredException(Device42Exception):
-    pass
-
-
-class RestClient:
-    """The requests library handles mantaining a session alive and cookies for
-    us.
-
-    This class is a simple namespace to get that sorted out for us
-    """
-
-    def __init__(
-        self,
-        hostname: str,
-        username: str,
-        password: str,
-        insecure: bool = False,
-        port: int = 443,
-    ) -> None:
-        self._username = username
-        self._password = password
-        self._hostname = hostname
-        self._insecure = insecure
-        self._port = port
-        self.session: requests.Session = self.prepareSession()
-
-    def prepareSession(self) -> requests.Session:
-        s = requests.Session()
-        s.auth = (self._username, self._password)
-        if self._insecure:
-            # Disable certificate warnings
-            urllib3.disable_warnings()
-            s.verify = False
-        self._session = s
-        return self._session
-
-    def request(
-        self,
-        url: str,
-        params: t.Optional[t.Dict[str, t.Any]] = None,
-        json: t.Optional[t.Dict[str, t.Any]] = None,
-        data: t.Optional[t.Dict[str, t.Any]] = None,
-        method: tt.HTTP_METHODS = "GET",
-    ) -> requests.Response:
-        request = functools.partial(
-            self.session.request,
-            method,
-            f"https://{self._hostname}:{self._port}{url}",
-            params=params,
-            json=json,
-            data=data,
-            verify=not self._insecure,
-        )
-        try:
-            res = request()
-            LOGGER.debug(f"Request response: {res.text}")
-            return res
-        except ConnectionResetError:
-            """
-            If we're making too many requests the server might reset the
-            connection. If so we try again but don't catch any further
-            Exceptions, if they appear that means we have problems
-            """
-            self.prepareSession()
-            return request()
-
-
-class D42Client(RestClient):
+class D42Client(BasicRestClient):
     def _check_err(self, jres: t.Any) -> tt.JSON_Res:
         """POST and PUT method validation
 
@@ -99,7 +23,7 @@ class D42Client(RestClient):
         ret_code = int(jres["code"])
         ret_msg = jres.get("msg", [])
         if ret_code != 0:
-            raise ReturnCodeException(" ".join(map(str, ret_msg)))
+            raise d42exc.ReturnCodeException(" ".join(map(str, ret_msg)))
         return ret_msg
 
     def _request(
@@ -120,7 +44,7 @@ class D42Client(RestClient):
                 try:
                     msg = err.response.json().get("msg", "")
                     if msg.startswith("License expired"):
-                        raise LicenseExpiredException(msg) from err
+                        raise d42exc.LicenseExpiredException(msg) from err
                 except js.JSONDecodeError:
                     # Ignore JSON decode exception here. The backend may not
                     # talk JSON when returning 500's.
@@ -153,9 +77,6 @@ class D42Client(RestClient):
                 ),
             )
 
-        def trust_me(i: t.Any) -> int:
-            return int(t.cast(t.SupportsInt, i))
-
         request_num = 1
         updated_params: t.Dict[str, t.Any]
         updated_params = {} if params is None else params
@@ -176,8 +97,8 @@ class D42Client(RestClient):
 
         yield resp
 
-        while request_num < trust_me(resp["total_count"]):
-            updated_params["offset"] = trust_me(resp["offset"]) + limit
+        while request_num < tbx.int_cast(resp["total_count"]):
+            updated_params["offset"] = tbx.int_cast(resp["offset"]) + limit
             request_num = request_num + 1
             LOGGER.debug(
                 f"Processing request #{request_num}) "
