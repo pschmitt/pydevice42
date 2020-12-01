@@ -10,10 +10,9 @@ from .types import (
     HTTP_METHODS,
     CustomFieldBase,
     JSON_Dict,
-    JSON_List,
     JSON_Res,
     ServiceInstanceCustomField,
-    Subnet,
+    SubnetBase,
 )
 
 LOGGER = logging.getLogger(__name__)
@@ -105,10 +104,10 @@ class D42Client(RestClient):
         be any type of JSON_Res
         """
         ret_code = int(jres["code"])
-        ret_msg = t.cast(t.List[t.Any], jres.get("msg", []))
+        ret_msg = jres.get("msg", [])
         if ret_code != 0:
             raise ReturnCodeException(" ".join(map(str, ret_msg)))
-        return t.cast(JSON_Res, ret_msg)
+        return ret_msg
 
     def _request(
         self,
@@ -117,7 +116,7 @@ class D42Client(RestClient):
         json: t.Optional[t.Dict[str, t.Any]] = None,
         data: t.Optional[t.Dict[str, t.Any]] = None,
         method: HTTP_METHODS = "GET",
-    ) -> JSON_Dict:
+    ) -> JSON_Res:
         res = self.request(
             url=endpoint, params=params, json=json, data=data, method=method
         )
@@ -144,68 +143,61 @@ class D42Client(RestClient):
         endpoint: str,
         # FIXME Is there any paginated *non-* GET request?
         method: HTTP_METHODS = "GET",
-        params: t.Dict = {},
-        data: t.Dict = {},
-        json: t.Dict = {},
+        params: t.Optional[t.Dict[str, t.Any]] = None,
+        json: t.Optional[t.Dict[str, t.Any]] = None,
+        data: t.Optional[t.Dict[str, t.Any]] = None,
         limit: int = 1000,
-    ) -> JSON_Res:
-        res: t.List = []
+    ) -> t.Iterable[JSON_Res]:
+        def page_request(new_params: t.Dict[str, t.Any]) -> JSON_Dict:
+            return t.cast(
+                JSON_Dict,
+                self._request(
+                    method=method,
+                    endpoint=endpoint,
+                    params=new_params,
+                    data=data,
+                    json=json,
+                ),
+            )
+
+        def trust_me(i: t.Any) -> int:
+            return int(t.cast(t.SupportsInt, i))
 
         request_num = 1
-        params["limit"] = limit
-        params["offset"] = 0
+        updated_params: t.Dict[str, t.Any]
+        updated_params = {} if params is None else params
+        updated_params["limit"] = limit
+        updated_params["offset"] = 0
 
         # First request
-        resp = self._request(
-            method=method,
-            endpoint=endpoint,
-            params=params,
-            data=data,
-            json=json,
-        )
+        resp = page_request(updated_params)
 
-        # Guess the key that holds the values we are after
-        data_key = [
-            x
-            for x in resp.keys()
-            if x not in ["total_count", "offset", "limit"]
-        ][0]
+        # Remove unecessary stuff from the response
+        # Not actually implemented (naturally) - But you can just uncomment
+        # if you'd like
+        # new_resp = {
+        #     k: v
+        #     for k, v in resp.items()
+        #     if k not in ["total_count", "offset", "limit"]
+        # }
 
-        # Append data
-        res += t.cast(t.Dict[str, t.Any], resp.get(data_key))
+        yield resp
 
-        # Update counters
-        total_count = int(t.cast(int, resp.get("total_count")))
-        params["offset"] = limit
-
-        while len(res) < total_count:
+        while request_num < trust_me(resp["total_count"]):
+            updated_params["offset"] = trust_me(resp["offset"]) + limit
             request_num = request_num + 1
             LOGGER.debug(
-                f"Processing request #{request_num} ({len(res)}/{total_count}) "
-                f"[Offset: {params['offset']} - Limit: {limit}]"
+                f"Processing request #{request_num}) "
+                f"[Offset: {updated_params['offset']} - Limit: {limit}]"
             )
 
-            resp = self._request(
-                method=method,
-                endpoint=endpoint,
-                params=params,
-                data=data,
-                json=json,
-            )
+            yield page_request(updated_params)
 
-            # Harvest data
-            res += t.cast(t.Dict, resp.get(data_key))
-
-            # Update counters
-            params["offset"] = int(resp.get("offset")) + limit
-            total_count = resp.get("total_count")
-        return res
-
-    def post_network(self, new_subnet: Subnet) -> JSON_Res:
+    def post_network(self, new_subnet: SubnetBase) -> JSON_Res:
         return self._request(
             endpoint="/api/1.0/subnets/",
             method="POST",
-            data=t.cast(t.Dict, new_subnet),
+            data=t.cast(t.Dict[str, t.Any], new_subnet),
         )
 
     def _get_DOQL_query(self, query_name: str) -> t.Any:
@@ -282,11 +274,12 @@ class D42Client(RestClient):
         )
 
     def get_all_devices(self) -> JSON_Res:
-        res = self._request(
+        return self._request(
             method="GET",
             endpoint="/api/1.0/devices/all/",
-        )
-        return res.get("Devices")
+        ).get("Devices")
 
     def get_all_service_instances(self) -> JSON_Res:
-        return self._paginated_request("/api/2.0/service_instances/")
+        return [
+            r for r in self._paginated_request("/api/2.0/service_instances/")
+        ]

@@ -1,4 +1,4 @@
-from typing import Dict, List, Literal, Optional, TypedDict, TypeVar, Union
+from typing import Dict, List, Literal, Optional, TypedDict, TypeVar, Union, Any
 
 # Representing JSON is notoriously tricky in mypy
 # Here's the best attempt I have so far
@@ -15,7 +15,7 @@ JSON_Dict = Dict[str, JSON_Values]
 
 JSON_List = List[JSON_Dict]
 
-JSON_Res = Union[JSON_List, JSON_Dict]
+JSON_Res = Any
 
 HTTP_METHODS = Literal["GET", "POST", "PUT"]
 STATUS = Literal["USED", "UNUSED"]
