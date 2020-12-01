@@ -1,4 +1,4 @@
-from typing import Any, Dict, List, Literal, Optional, TypedDict, TypeVar, Union
+import typing as t
 
 # Representing JSON is notoriously tricky in mypy
 # Here's the best attempt I have so far
@@ -9,20 +9,20 @@ from typing import Any, Dict, List, Literal, Optional, TypedDict, TypeVar, Union
 # self-referential values
 # Meaning that if we get some sort of fancy value, we have to cast it
 # to the appropriately typed dict
-JSON_Values = Union[str, int, float, bool, None]
+JSON_Values = t.Union[str, int, float, bool, None]
 
-JSON_Dict = Dict[str, JSON_Values]
+JSON_Dict = t.Dict[str, JSON_Values]
 
-JSON_List = List[JSON_Dict]
+JSON_List = t.List[JSON_Dict]
 
-JSON_Res = Any
+JSON_Res = t.Any
 
-HTTP_METHODS = Literal["GET", "POST", "PUT"]
-STATUS = Literal["USED", "UNUSED"]
-T = TypeVar("T")
+HTTP_METHODS = t.Literal["GET", "POST", "PUT"]
+STATUS = t.Literal["USED", "UNUSED"]
+T = t.TypeVar("T")
 
 
-class Vlan(TypedDict, total=False):
+class Vlan(t.TypedDict, total=False):
     number: str
     name: str
     description: str
@@ -30,7 +30,7 @@ class Vlan(TypedDict, total=False):
     vlan_id: str
 
 
-class SubnetBase(TypedDict):
+class SubnetBase(t.TypedDict):
     network: str
     mask_bits: str
     name: str
@@ -41,13 +41,13 @@ class Subnet(SubnetBase, total=False):
     notes: str
 
 
-class StorageServiceInstance(TypedDict):
-    service_name: Literal["storage_service"]
+class StorageServiceInstance(t.TypedDict):
+    service_name: t.Literal["storage_service"]
     # id that points over to a Clustered Device that houses our LUNS!
     device_id: int
 
 
-class CustomFieldBase(TypedDict):
+class CustomFieldBase(t.TypedDict):
     """
     Editing a custom field should be as simple as sending these to
     the relevant API.
@@ -73,7 +73,7 @@ class ServiceInstanceCustomField(CustomFieldBase, total=False):
     service_name: str
     type_id: int
     type: str
-    related_model_name: Optional[int]
+    related_model_name: t.Optional[int]
     filterable: bool
     mandatory: bool
     log_for_api: bool

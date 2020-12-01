@@ -1,19 +1,12 @@
+import functools
 import json as js
 import logging
 import typing as t
-from functools import partial
 
+import requests
 import urllib3
-from requests import HTTPError, Response, Session
 
-from .types import (
-    HTTP_METHODS,
-    CustomFieldBase,
-    JSON_Dict,
-    JSON_Res,
-    ServiceInstanceCustomField,
-    SubnetBase,
-)
+from . import types as tt
 
 LOGGER = logging.getLogger(__name__)
 
@@ -50,10 +43,10 @@ class RestClient:
         self._hostname = hostname
         self._insecure = insecure
         self._port = port
-        self.session: Session = self.prepareSession()
+        self.session: requests.Session = self.prepareSession()
 
-    def prepareSession(self) -> Session:
-        s = Session()
+    def prepareSession(self) -> requests.Session:
+        s = requests.Session()
         s.auth = (self._username, self._password)
         if self._insecure:
             # Disable certificate warnings
@@ -68,9 +61,9 @@ class RestClient:
         params: t.Optional[t.Dict[str, t.Any]] = None,
         json: t.Optional[t.Dict[str, t.Any]] = None,
         data: t.Optional[t.Dict[str, t.Any]] = None,
-        method: HTTP_METHODS = "GET",
-    ) -> Response:
-        request = partial(
+        method: tt.HTTP_METHODS = "GET",
+    ) -> requests.Response:
+        request = functools.partial(
             self.session.request,
             method,
             f"https://{self._hostname}:{self._port}{url}",
@@ -94,14 +87,14 @@ class RestClient:
 
 
 class D42Client(RestClient):
-    def _check_err(self, jres: t.Any) -> JSON_Res:
+    def _check_err(self, jres: t.Any) -> tt.JSON_Res:
         """POST and PUT method validation
 
         Raises exception if the return code isn't 0.
 
         Else, returns the message from the server.
         This is _generally_ a t.List[t.Any], but I have generalised it to
-        be any type of JSON_Res
+        be any type of tt.JSON_Res
         """
         ret_code = int(jres["code"])
         ret_msg = jres.get("msg", [])
@@ -115,14 +108,14 @@ class D42Client(RestClient):
         params: t.Optional[t.Dict[str, t.Any]] = None,
         json: t.Optional[t.Dict[str, t.Any]] = None,
         data: t.Optional[t.Dict[str, t.Any]] = None,
-        method: HTTP_METHODS = "GET",
-    ) -> JSON_Res:
+        method: tt.HTTP_METHODS = "GET",
+    ) -> tt.JSON_Res:
         res = self.request(
             url=endpoint, params=params, json=json, data=data, method=method
         )
         try:
             res.raise_for_status()
-        except HTTPError as err:
+        except requests.HTTPError as err:
             if err.response.status_code == 500:
                 try:
                     msg = err.response.json().get("msg", "")
@@ -133,7 +126,7 @@ class D42Client(RestClient):
                     # talk JSON when returning 500's.
                     pass
             raise
-        jres: JSON_Res = res.json()
+        jres: tt.JSON_Res = res.json()
         if method in ["POST", "PUT"]:
             return self._check_err(jres)
         return jres
@@ -142,15 +135,15 @@ class D42Client(RestClient):
         self,
         endpoint: str,
         # FIXME Is there any paginated *non-* GET request?
-        method: HTTP_METHODS = "GET",
+        method: tt.HTTP_METHODS = "GET",
         params: t.Optional[t.Dict[str, t.Any]] = None,
         json: t.Optional[t.Dict[str, t.Any]] = None,
         data: t.Optional[t.Dict[str, t.Any]] = None,
         limit: int = 1000,
-    ) -> t.Iterable[JSON_Res]:
-        def page_request(new_params: t.Dict[str, t.Any]) -> JSON_Dict:
+    ) -> t.Iterable[tt.JSON_Res]:
+        def page_request(new_params: t.Dict[str, t.Any]) -> tt.JSON_Dict:
             return t.cast(
-                JSON_Dict,
+                tt.JSON_Dict,
                 self._request(
                     method=method,
                     endpoint=endpoint,
@@ -193,7 +186,7 @@ class D42Client(RestClient):
 
             yield page_request(updated_params)
 
-    def post_network(self, new_subnet: SubnetBase) -> JSON_Res:
+    def post_network(self, new_subnet: tt.SubnetBase) -> tt.JSON_Res:
         return self._request(
             endpoint="/api/1.0/subnets/",
             method="POST",
@@ -220,20 +213,20 @@ class D42Client(RestClient):
 
     def get_custom_fields_of_service_instances(
         self, save_to_file: bool = False
-    ) -> t.List[ServiceInstanceCustomField]:
+    ) -> t.List[tt.ServiceInstanceCustomField]:
         """
         Requires that you've setup a DOQL custom query
 
         Yes it sucks, but I honestly haven't found a better way :(
         """
         return t.cast(
-            t.List[ServiceInstanceCustomField],
+            t.List[tt.ServiceInstanceCustomField],
             self._get_DOQL_query("get_service_instance_custom_fields"),
         )
 
     def update_custom_field_service_instance(
-        self, cf: CustomFieldBase
-    ) -> JSON_Res:
+        self, cf: tt.CustomFieldBase
+    ) -> tt.JSON_Res:
         """Note that CustomFieldBase's `value` is a string!
 
         This means that if you're inputting a json as a custom field
@@ -273,13 +266,13 @@ class D42Client(RestClient):
             data=t.cast(t.Dict[str, t.Any], cf),
         )
 
-    def get_all_devices(self) -> JSON_Res:
+    def get_all_devices(self) -> tt.JSON_Res:
         return self._request(
             method="GET",
             endpoint="/api/1.0/devices/all/",
         ).get("Devices")
 
-    def get_all_service_instances(self) -> JSON_Res:
+    def get_all_service_instances(self) -> tt.JSON_Res:
         return [
             r for r in self._paginated_request("/api/2.0/service_instances/")
         ]
