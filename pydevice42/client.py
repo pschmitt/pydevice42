@@ -25,7 +25,7 @@ class ReturnCodeException(Device42Exception):
     pass
 
 
-class LicenseExpired(Device42Exception):
+class LicenseExpiredException(Device42Exception):
     pass
 
 
@@ -126,7 +126,7 @@ class D42Client(RestClient):
                 try:
                     msg = err.response.json().get("msg", "")
                     if msg.startswith("License expired"):
-                        raise LicenseExpired(msg) from err
+                        raise LicenseExpiredException(msg) from err
                 except js.JSONDecodeError:
                     # Ignore JSON decode exception here. The backend may not
                     # talk JSON when returning 500's.
