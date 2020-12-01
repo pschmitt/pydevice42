@@ -1,9 +1,10 @@
+import json as js
 import logging
 import typing as t
 from functools import partial
 
 import urllib3
-from requests import Response, Session
+from requests import HTTPError, Response, Session
 
 from .types import (
     HTTP_METHODS,
@@ -18,7 +19,15 @@ from .types import (
 LOGGER = logging.getLogger(__name__)
 
 
-class ReturnCodeException(Exception):
+class Device42Exception(Exception):
+    pass
+
+
+class ReturnCodeException(Device42Exception):
+    pass
+
+
+class LicenseExpiredException(Device42Exception):
     pass
 
 
@@ -112,7 +121,19 @@ class D42Client(RestClient):
         res = self.request(
             url=endpoint, params=params, json=json, data=data, method=method
         )
-        res.raise_for_status()
+        try:
+            res.raise_for_status()
+        except HTTPError as err:
+            if err.response.status_code == 500:
+                try:
+                    msg = err.response.json().get("msg", "")
+                    if msg.startswith("License expired"):
+                        raise LicenseExpiredException(msg) from err
+                except js.JSONDecodeError:
+                    # Ignore JSON decode exception here. The backend may not
+                    # talk JSON when returning 500's.
+                    pass
+            raise
         jres: JSON_Res = res.json()
         if method in ["POST", "PUT"]:
             return self._check_err(jres)
