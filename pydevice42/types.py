@@ -22,6 +22,10 @@ STATUS = t.Literal["USED", "UNUSED"]
 T = t.TypeVar("T")
 
 
+def int_cast(i: t.Any) -> int:
+    return int(t.cast(t.SupportsInt, i))
+
+
 class Vlan(t.TypedDict, total=False):
     number: str
     name: str

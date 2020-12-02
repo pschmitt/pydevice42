@@ -4,7 +4,6 @@ import typing as t
 import requests
 
 from . import exceptions as d42exc
-from . import toolbox as tbx
 from . import types as tt
 from .basicrestclient import BasicRestClient
 from .logger import LOGGER
@@ -97,8 +96,8 @@ class D42Client(BasicRestClient):
 
         yield resp_data
 
-        while request_num < tbx.int_cast(resp["total_count"]):
-            updated_params["offset"] = tbx.int_cast(resp["offset"]) + limit
+        while request_num < tt.int_cast(resp["total_count"]):
+            updated_params["offset"] = tt.int_cast(resp["offset"]) + limit
             request_num = request_num + 1
             LOGGER.debug(
                 f"Processing request #{request_num}) "
