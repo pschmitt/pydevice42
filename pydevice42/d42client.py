@@ -45,6 +45,8 @@ class D42Client(BasicRestClient):
                     msg = err.response.json().get("msg", "")
                     if msg.startswith("License expired"):
                         raise d42exc.LicenseExpiredException(msg) from err
+                    elif msg.startswith("License is not valid for"):
+                        raise d42exc.LicenseInsufficientException(msg) from err
                 except js.JSONDecodeError:
                     # Ignore JSON decode exception here. The backend may not
                     # talk JSON when returning 500's.
