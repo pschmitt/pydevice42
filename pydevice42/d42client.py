@@ -9,6 +9,11 @@ from .basicrestclient import BasicRestClient
 from .logger import LOGGER
 
 
+def extract_data(data: t.Dict) -> t.Any:
+    metadata_keys = ["offset", "total_count", "limit"]
+    return data.get([k for k in list(data.keys()) if k not in metadata_keys][0])
+
+
 class D42Client(BasicRestClient):
     def _check_err(self, jres: t.Any) -> tt.JSON_Res:
         """POST and PUT method validation
@@ -64,7 +69,7 @@ class D42Client(BasicRestClient):
         params: t.Optional[t.Dict[str, t.Any]] = None,
         json: t.Optional[t.Dict[str, t.Any]] = None,
         data: t.Optional[t.Dict[str, t.Any]] = None,
-        limit: int = 1000,
+        limit: int = 4,
     ) -> t.Iterable[tt.JSON_Res]:
         def page_request(new_params: t.Dict[str, t.Any]) -> tt.JSON_Dict:
             return t.cast(
@@ -79,32 +84,34 @@ class D42Client(BasicRestClient):
             )
 
         request_num = 1
-        updated_params: t.Dict[str, t.Any]
-        updated_params = {} if params is None else params
-        updated_params["limit"] = limit
-        updated_params["offset"] = 0
+        params = {} if params is None else params
+        params["limit"] = limit
+        params["offset"] = 0
 
         # First request
-        resp = page_request(updated_params)
+        resp = page_request(params)
 
-        # Remove metadata from the response
-        resp_data = {
-            k: v
-            for k, v in resp.items()
-            if k not in ["total_count", "offset", "limit"]
-        }
+        offset = tt.int_cast(resp.get("offset"))
+        total_count = tt.int_cast(resp.get("total_count"))
 
+        # Extract the actual data
+        resp_data: t.Any = extract_data(resp)
         yield resp_data
 
-        while request_num < tt.int_cast(resp["total_count"]):
-            updated_params["offset"] = tt.int_cast(resp["offset"]) + limit
-            request_num = request_num + 1
+        processed = len(resp_data)
+
+        while processed < total_count:
+            params["offset"] += limit
+            request_num += 1
             LOGGER.debug(
                 f"Processing request #{request_num}) "
-                f"[Offset: {updated_params['offset']} - Limit: {limit}]"
+                f"[Offset: {params['offset']} - Limit: {limit}] "
+                f"{len(resp_data)}/{total_count}"
             )
-
-            yield page_request(updated_params)
+            resp = page_request(params)
+            resp_data = extract_data(resp)
+            processed += len(resp_data)
+            yield resp_data
 
     def post_network(self, new_subnet: tt.SubnetBase) -> tt.JSON_Res:
         return self._request(
@@ -195,4 +202,12 @@ class D42Client(BasicRestClient):
     def get_all_service_instances(self) -> tt.JSON_Res:
         return [
             r for r in self._paginated_request("/api/2.0/service_instances/")
+        ]
+
+    def get_all_application_components(self) -> tt.JSON_Res:
+        return [r for r in self._paginated_request("/api/2.0/appcomps/")]
+
+    def get_all_operating_systems(self) -> tt.JSON_Res:
+        return [
+            r for r in self._paginated_request("/api/1.0/operatingsystems/")
         ]
