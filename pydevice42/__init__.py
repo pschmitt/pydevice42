@@ -1,3 +1,3 @@
-from .client import D42Client, RestClient
+from .d42client import D42Client
 
-__all__ = ["RestClient", "D42Client"]
+__all__ = ["D42Client"]

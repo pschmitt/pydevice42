@@ -53,6 +53,10 @@ then
   check_name="all"
 
   case "$1" in
+    all)
+      check_name="all"
+      shift
+      ;;
     flake8|pyflakes|flake|lint|flakehell)
       check_name="flakehell"
       shift
