@@ -14,6 +14,14 @@ def extract_data(data: t.Dict) -> t.Any:
     return data.get([k for k in list(data.keys()) if k not in metadata_keys][0])
 
 
+def flatten(t: t.List) -> t.List:
+    flat_list = []
+    for sublist in t:
+        for item in sublist:
+            flat_list.append(item)
+    return flat_list
+
+
 class D42Client(BasicRestClient):
     def _check_err(self, jres: t.Any) -> tt.JSON_Res:
         """POST and PUT method validation
@@ -91,10 +99,8 @@ class D42Client(BasicRestClient):
         # First request
         resp = page_request(params)
 
-        offset = tt.int_cast(resp.get("offset"))
+        # Process data
         total_count = tt.int_cast(resp.get("total_count"))
-
-        # Extract the actual data
         resp_data: t.Any = extract_data(resp)
         yield resp_data
 
@@ -112,6 +118,11 @@ class D42Client(BasicRestClient):
             resp_data = extract_data(resp)
             processed += len(resp_data)
             yield resp_data
+
+    def _flattened_paginated_request(
+        self, *args: t.Any, **kwargs: t.Any
+    ) -> t.Iterable[tt.JSON_Res]:
+        return flatten(t.cast(t.List, self._paginated_request(*args, **kwargs)))
 
     def post_network(self, new_subnet: tt.SubnetBase) -> tt.JSON_Res:
         return self._request(
@@ -200,14 +211,10 @@ class D42Client(BasicRestClient):
         ).get("Devices")
 
     def get_all_service_instances(self) -> tt.JSON_Res:
-        return [
-            r for r in self._paginated_request("/api/2.0/service_instances/")
-        ]
+        return self._flattened_paginated_request("/api/2.0/service_instances/")
 
     def get_all_application_components(self) -> tt.JSON_Res:
-        return [r for r in self._paginated_request("/api/2.0/appcomps/")]
+        return self._flattened_paginated_request("/api/2.0/appcomps/")
 
     def get_all_operating_systems(self) -> tt.JSON_Res:
-        return [
-            r for r in self._paginated_request("/api/1.0/operatingsystems/")
-        ]
+        return self._flattened_paginated_request("/api/1.0/operatingsystems/")
