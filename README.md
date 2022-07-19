@@ -1,3 +1,10 @@
+# 🚮 Archived! 
+  
+If you're interested in maintaining this package please get in touch with me at:
+  
+https://github.com/pschmitt/contact/issues/new
+
+
 [![CI](https://github.com/post-luxembourg/pydevice42/workflows/CI/badge.svg)](https://github.com/post-luxembourg/pydevice42/actions?query=workflow%3ACI)
 [![PyPI](https://img.shields.io/pypi/v/pydevice42)](https://pypi.org/project/pydevice42/)
 
